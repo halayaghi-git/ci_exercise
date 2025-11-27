@@ -1,67 +1,107 @@
 """Simple calculator module for CI demonstration."""
 
-import os  # LINT ERROR: F401 - unused import
-import sys  # LINT ERROR: F401 - unused import
-import subprocess
-from typing import List  # LINT ERROR: F401 - unused import
+from __future__ import annotations
+
+import ast
+import math
+import operator
+import os
+from collections.abc import Sequence
+from typing import Callable, SupportsFloat
+
+BinaryOpMap = dict[type[ast.operator], Callable[[float, float], float]]
+UnaryOpMap = dict[type[ast.unaryop], Callable[[float], float]]
 
 
-def add(a: float,b: float) -> float:
+def add(a: float, b: float) -> float:
     """Add two numbers."""
-    return a+b
+
+    return a + b
 
 
-def subtract(a: float,b: float) -> float:
+def subtract(a: float, b: float) -> float:
     """Subtract b from a."""
-    return a-b
+
+    return a - b
 
 
-def multiply(a: float,b: float) -> float:
+def multiply(a: float, b: float) -> float:
     """Multiply two numbers."""
-    # BUG: Wrong operation - should be multiplication, not addition!
-    return a+b
+
+    return a * b
 
 
-def divide(a: float,b: float) -> float:
+def divide(a: float, b: float) -> float:
     """Divide a by b.
 
     Raises:
         ValueError: If b is zero.
     """
-    if b==0:
+
+    if b == 0:
         raise ValueError("Cannot divide by zero")
-    return a/b
+    return a / b
 
 
-def power(base, exponent):  # LINT ERROR: Missing type annotations (MyPy)
+def power(base: SupportsFloat, exponent: SupportsFloat) -> float:
     """Raise base to the power of exponent."""
-    result = base ** exponent
-    unused_variable = 42  # LINT ERROR: F841 - local variable assigned but never used
-    return result
+
+    return math.pow(float(base), float(exponent))
 
 
 def evaluate_expression(expression: str) -> float:
-    """Evaluate a mathematical expression.
+    """Safely evaluate a basic arithmetic expression using ``ast``."""
 
-    SECURITY ISSUE: Uses eval() which can execute arbitrary code!
-    Bandit B307: Use of possibly insecure function - eval()
-    """
-    # SECURITY BUG: Never use eval() with untrusted input!
-    return eval(expression)
-
-
-def run_calculation(calc_command: str) -> str:
-    """Run a calculation command.
-
-    SECURITY ISSUE: Uses shell=True which is vulnerable to injection!
-    Bandit B602: subprocess call with shell=True
-    """
-    # SECURITY BUG: shell=True is dangerous with user input!
-    result = subprocess.run(calc_command, shell=True, capture_output=True, text=True)
-    return result.stdout
+    try:
+        parsed = ast.parse(expression, mode="eval")
+    except SyntaxError as exc:  # pragma: no cover - defensive
+        raise ValueError("Invalid numeric expression") from exc
+    return _evaluate_ast(parsed)
 
 
-# SECURITY ISSUE: Hardcoded password
-# Bandit B105: Possible hardcoded password
-API_KEY = "sk-1234567890abcdef"  # SECURITY BUG: Never hardcode secrets!
-DATABASE_PASSWORD = "admin123"  # SECURITY BUG: Never hardcode passwords!
+def run_calculation(calc_command: str | Sequence[str]) -> str:
+    """Evaluate a calculation string locally without invoking subprocesses."""
+
+    if isinstance(calc_command, str):
+        expression = calc_command
+    else:
+        expression = " ".join(calc_command)
+    return str(evaluate_expression(expression.strip()))
+
+
+# Load secrets from the environment instead of hardcoding them.
+API_KEY = os.getenv("APP_API_KEY", "")
+DATABASE_PASSWORD = os.getenv("DATABASE_PASSWORD", "")
+
+
+_BINARY_OPERATIONS: BinaryOpMap = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.Pow: operator.pow,
+}
+
+_UNARY_OPERATIONS: UnaryOpMap = {
+    ast.UAdd: operator.pos,
+    ast.USub: operator.neg,
+}
+
+
+def _evaluate_ast(node: ast.AST) -> float:
+    """Recursively evaluate a restricted arithmetic AST tree."""
+
+    if isinstance(node, ast.Expression):
+        return _evaluate_ast(node.body)
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return float(node.value)
+    if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARY_OPERATIONS:
+        operand = _evaluate_ast(node.operand)
+        return _UNARY_OPERATIONS[type(node.op)](operand)
+    if isinstance(node, ast.BinOp) and type(node.op) in _BINARY_OPERATIONS:
+        left = _evaluate_ast(node.left)
+        right = _evaluate_ast(node.right)
+        if isinstance(node.op, ast.Div) and right == 0:
+            raise ValueError("Cannot divide by zero")
+        return _BINARY_OPERATIONS[type(node.op)](left, right)
+    raise ValueError("Unsupported expression")

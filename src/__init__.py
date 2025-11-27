@@ -1,4 +1,21 @@
-# CI Exercise - Python Project
+"""Top-level package exports for the CI exercise project."""
 
-# BUILD ERROR: Import from non-existent module will fail at import time
-from src.nonexistent_module import something  # This will cause ImportError!
+from .calculator import add, divide, evaluate_expression, multiply, subtract
+from .string_utils import (
+    capitalize_words,
+    count_vowels,
+    is_palindrome,
+    reverse_string,
+)
+
+__all__ = [
+    "add",
+    "divide",
+    "evaluate_expression",
+    "multiply",
+    "subtract",
+    "reverse_string",
+    "is_palindrome",
+    "count_vowels",
+    "capitalize_words",
+]
