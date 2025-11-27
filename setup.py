@@ -2,13 +2,13 @@
 
 from setuptools import setup, find_packages
 
-# BUILD ERROR: Missing closing parenthesis - syntax error!
 setup(
     name="ci_exercise",
-    version="1.0.0"  # BUILD ERROR: Missing comma after version!
+    version="1.0.0",
     description="A sample project demonstrating CI/CD with GitHub Actions",
     author="DevOps Student",
-    packages=find_packages(),
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
     python_requires=">=3.9",
     classifiers=[
         "Development Status :: 3 - Alpha",
